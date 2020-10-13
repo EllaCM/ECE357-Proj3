@@ -18,16 +18,17 @@ int main(int argc, char *argv[]){
 		fprintf(stderr,"Unable to open file: %s.\n",strerror(errno));
 	}
 	int read_in = 0;
-	size_t length = 0;
-	char *line = NULL;
+	size_t length = 1024;
+	char line[length];
+	char *lineptr = line;
 	int bytes_read;
 	char **cmd;
 	int cmd_length = 0;
 	int return_val;
-	while(bytes_read = getline(&line, &length, in)!=-1){
-		if(bytes_read==0 || (*line)=='#')	continue;
+	while(bytes_read = getline(&lineptr, &length, stdin)!=-1){
+		if(bytes_read==0 || (*lineptr)=='#')	continue;
 		char *token;
-		while((token=strtok(line, " "))!=NULL){
+		while((token=strtok(lineptr, " "))!=NULL){
 			cmd= malloc(BUFSIZ*sizeof(char));
 			strcpy(cmd[cmd_length], token);
 			cmd_length++;
