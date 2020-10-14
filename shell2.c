@@ -65,7 +65,6 @@ int main(int argc, char *argv[]){
 				}
 				if(chdir(cmd[1])==-1){fprintf(stderr,"Cannot change the directory: %s.\n",strerror(errno));}
 			}
-			free(cmd);
 		}
 		else if(!strcmp(cmd[0],"pwd"))
 		{
@@ -82,7 +81,6 @@ int main(int argc, char *argv[]){
 					fprintf(stdout,"%s\n",buf);
 				}
 			}
-			free(cmd);
 		}
 		else if(!strcmp(cmd[0],"exit"))
 		{
@@ -101,7 +99,8 @@ int main(int argc, char *argv[]){
 					/*reason for using strtol instead of atoi:
 					atoi cannot distinguish a zero return, an invalid return, and an out_of_range return*/
 					char **endptr = malloc(sizeof(cmd));
-					int status = strtol(cmd[1], endptr, 10);
+					errno = 0;
+					long status = strtol(cmd[1], endptr, 10);
 					if(**endptr)
 					{
 						fprintf(stderr, "Error: specified status value is not a number\n");
@@ -115,9 +114,9 @@ int main(int argc, char *argv[]){
 						free(cmd);
 						return status;
 					}
+					free(endptr);
 				}
 			}
-			free(cmd);
 		}
 		else //non built-in commands
 		{
@@ -145,6 +144,7 @@ int main(int argc, char *argv[]){
 								{
 									fprintf(stderr, "Error: Could not open or create file for writing in append mode");
 								}
+								//dup2 here
 							}
 							else
 							{
@@ -157,6 +157,7 @@ int main(int argc, char *argv[]){
 					}
 				}				
 			}
+			// wait somewhere here
 		}
 		free(cmd);
 	}
