@@ -152,10 +152,12 @@ int main(int argc, char *argv[]){
 									fprintf(stderr, "Error: Could not open or create file for writing in append mode");
 								}
 								//dup2 here
-								int new_fd = dup2(fd, STDOUT_FILENO);
-								if(new_fd==-1){
+								
+								if(dup2(fd, STDOUT_FILENO)<0){
 									fprintf(stderr, "Could not duplicate the fd");
 								}
+								close(fd);
+								
 							}
 							else
 							{
@@ -164,13 +166,27 @@ int main(int argc, char *argv[]){
 								{
 									fprintf(stderr, "Error: Could not open or create file for writing in truncation mode");
 								}
-								
+								fprintf(stdout, "Also need to duplicate here?\n");
+								close(fd);
 							}
+							
 					}
 				}				
 			}
 			// wait somewhere here
 			w = wait3(&wstatus, 0, &ru);
+			if(w==-1)	fprintf(stderr, "Wait failed.\n");
+			else{
+				if(wstatus==0){
+					fprintf(stderr, "Child process %d consumed %ld.%.6ld seconds of user time\n", w, ru.ru_utime.tv_sec, ru.ru_utime.tv_usec);
+				}else{
+					if(WIFSIGNALED(wstatus))
+						fprintf(stderr, "Child process %d exited with signal%d\n", w, WTERMSIG(wstatus));
+					else
+						fprintf(stderr, "Child process %d exited with non-zero return value %d.\n", w, WEXITSTATUS(wstatus));
+				}
+			}
+			return_val = wstatus;
 		}
 		free(cmd);
 	}
