@@ -123,13 +123,44 @@ int main(int argc, char *argv[]){
 		{
 			if(fork() == 0)
 			{
-				
+				int fd;
+				for(int i = redirIndex; i < cmd_length; i++)
+				{
+					char *rdrTkn = cmd[i];
+					char *fileName = NULL;
+					switch(rdrTkn[0])
+					{
+						case '<':
+							fileName = rdrTkn + 1;
+							if((fd = open(fileName, O_RDONLY) == -1))
+							{
+								fprintf(stderr, "Error: Could not open file for reading");
+							}
+							break;
+						case '>':
+							if(rdrTkn[1] == '>')
+							{
+								fileName = rdrTkn + 2;
+								if((fd = open(fileName, O_WRONLY|O_CREAT|O_APPEND) == -1))
+								{
+									fprintf(stderr, "Error: Could not open or create file for writing in append mode");
+								}
+							}
+							else
+							{
+								fileName = rdrTkn + 1;
+								if((fd = open(fileName, O_WRONLY|O_CREAT|O_TRUNC) == -1))
+								{
+									fprintf(stderr, "Error: Could not open or create file for writing in truncation mode");
+								}
+							}
+					}
+				}				
 			}
 		}
 		free(cmd);
 	}
 	return 0;
-
 }
 
 void printCommand(char **command, int cmd_length)
