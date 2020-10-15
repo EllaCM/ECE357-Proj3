@@ -20,10 +20,11 @@ int main(int argc, char *argv[]){
 	char line[length];
 	char *lineptr = line;
 	int bytes_read;
-	int return_val;
+	
 	pid_t w;
+	struct timeval start, end, result;
 	struct rusage ru;
-	int wstatus;
+	int return_val;
 	while(bytes_read = getline(&lineptr, &length, stdin)!=-1)
 	{
 		if(bytes_read==0 || *lineptr=='#' || *lineptr == 10){printf("No Command\n"); continue;}
@@ -130,6 +131,7 @@ int main(int argc, char *argv[]){
 			if(fork() == 0)
 			{
 				int fd;
+				
 				for(int i = redirIndex; i < cmd_length; i++)
 				{
 					char *rdrTkn = cmd[i];
@@ -142,6 +144,10 @@ int main(int argc, char *argv[]){
 							{
 								fprintf(stderr, "Error: Could not open file for reading");
 							}
+							if(dup2(fd, 0)<0){
+									fprintf(stderr, "Could not duplicate the fd");
+							}
+							close(fd);
 							break;
 						case '>':
 							if(rdrTkn[1] == '>')
@@ -151,13 +157,7 @@ int main(int argc, char *argv[]){
 								{
 									fprintf(stderr, "Error: Could not open or create file for writing in append mode");
 								}
-								//dup2 here
-								
-								if(dup2(fd, STDOUT_FILENO)<0){
-									fprintf(stderr, "Could not duplicate the fd");
-								}
-								close(fd);
-								
+									
 							}
 							else
 							{
@@ -166,27 +166,57 @@ int main(int argc, char *argv[]){
 								{
 									fprintf(stderr, "Error: Could not open or create file for writing in truncation mode");
 								}
-								fprintf(stdout, "Also need to duplicate here?\n");
-								close(fd);
 							}
-							
+							if(dup2(fd, 1)<0){
+									fprintf(stderr, "Could not duplicate the fd");
+							}
+							close(fd);
+							break;
+						case '2':
+							if(rdrTkn[2]=='>'){
+								
+								fileName = rdrTkn +3;
+								fd = open(fileName, O_WRONLY|O_CREAT|O_APPEND, 0666);
+								
+							}else{
+								fileName = rdrTkn +2;
+								fd = open(fileName, O_WRONLY|O_CREAT|O_TRUNC, 0666);
+								
+							}
+							if(dup2(fd, 2)<0){
+								fprintf(stderr, "Could not duplicate the fd.\n");
+							}
+							close(fd);
+							break;
 					}
-				}				
+				}
+				/*not sure whether i get this right
+				if(execvp(cmd[0],cmd)<0){
+					fprintf(stderr, "Fail to execute.\n");
+					exit(127);
+				}
+				*/
+				return 0;		
 			}
+			
 			// wait somewhere here
-			w = wait3(&wstatus, 0, &ru);
+			w = wait3(&return_val, 0, &ru);
 			if(w==-1)	fprintf(stderr, "Wait failed.\n");
 			else{
-				if(wstatus==0){
+				if(return_val==0){
 					fprintf(stderr, "Child process %d consumed %ld.%.6ld seconds of user time\n", w, ru.ru_utime.tv_sec, ru.ru_utime.tv_usec);
 				}else{
-					if(WIFSIGNALED(wstatus))
-						fprintf(stderr, "Child process %d exited with signal%d\n", w, WTERMSIG(wstatus));
+					if(WIFSIGNALED(return_val))
+						fprintf(stderr, "Child process %d exited with signal%d\n", w, WTERMSIG(return_val));
 					else
-						fprintf(stderr, "Child process %d exited with non-zero return value %d.\n", w, WEXITSTATUS(wstatus));
+						fprintf(stderr, "Child process %d exited with non-zero return value %d.\n", w, WEXITSTATUS(return_val));
 				}
 			}
-			return_val = wstatus;
+			
+			timersub(&end, &start, &result);
+			fprintf(stdout, "Real: %ld.%6lds User: %ld.%06lds Sys: %ld.%06lds\n", 
+			result.tv_sec, result.tv_usec, ru.ru_utime.tv_sec,
+			ru.ru_utime.tv_usec, ru.ru_stime.tv_sec, ru.ru_stime.tv_usec);
 		}
 		free(cmd);
 	}
