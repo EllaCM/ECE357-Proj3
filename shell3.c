@@ -1,3 +1,4 @@
+/*draft branch*/
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
@@ -14,28 +15,29 @@ void printCommand(char **command, int cmd_length);
 
 int isRedir(char arg);
 
+void clearCommand(char **command, int cmd_length);
+
 int main(int argc, char *argv[]){
-	int read_in = 0;
-	size_t length = 1024;
+	struct timeval realStart, realEnd, real;
+	size_t length = 4096;
 	char line[length];
 	char *lineptr = line;
 	int bytes_read;
-	
 	pid_t w;
-	struct timeval start, end, result;
 	struct rusage ru;
 	int return_val;
 	while(bytes_read = getline(&lineptr, &length, stdin)!=-1)
 	{
-		if(bytes_read==0 || *lineptr=='#' || *lineptr == 10){printf("No Command\n"); continue;}
+		gettimeofday(&realStart, NULL);
+		if(!bytes_read || *lineptr=='#' || *lineptr == 10){printf("No Command\n"); continue;}
 		int cmd_length = 0;
 		int redirIndex = 0; //Index of token at which redirection starts
 		char **cmd = malloc(sizeof(char*));
+		char **cmdArgs = malloc(sizeof(char*));
 		char *token;
-		char *lineParse = lineptr;
 		size_t currentSize = 0;
 		int currentToken = 0;
-		while((token=strtok(lineParse, " "))!=NULL){
+		while((token=strtok(lineptr, " "))!=NULL){
 			int tokenIndex = 0;
 			while(token[tokenIndex] && token[tokenIndex] != 10)
 			{
@@ -54,9 +56,28 @@ int main(int argc, char *argv[]){
 			cmd[cmd_length] = tokenCpy;
 			cmd_length++;
 			cmd = realloc(cmd, (cmd_length+1)*sizeof(char*));
-			if(lineParse){lineParse = NULL;}
+			cmd[cmd_length] = NULL; //empty out any strings from last time
+			if(lineptr){lineptr = NULL;}
 		}
 		printCommand(cmd, cmd_length);
+		int argLength = 0;
+		if(redirIndex)
+		{
+			argLength = redirIndex;
+			cmdArgs = realloc(cmdArgs, argLength*sizeof(char*)); //Create vector of arguments without redirection
+			for(int i = 0; i<redirIndex;i++)
+			{
+				cmdArgs[i] = cmd[i];
+			}
+			printCommand(cmdArgs, redirIndex);
+		}
+		else
+		{
+			argLength = cmd_length+1;
+			cmdArgs = realloc(cmdArgs, argLength*sizeof(char*));
+			cmdArgs = cmd;
+			printCommand(cmdArgs, cmd_length);
+		}
 		//built-in commands
 		if(!strcmp(cmd[0], "cd"))
 		{
@@ -131,7 +152,6 @@ int main(int argc, char *argv[]){
 			if(fork() == 0)
 			{
 				int fd;
-				
 				for(int i = redirIndex; i < cmd_length; i++)
 				{
 					char *rdrTkn = cmd[i];
@@ -140,12 +160,12 @@ int main(int argc, char *argv[]){
 					{
 						case '<':
 							fileName = rdrTkn + 1;
-							if((fd = open(fileName, O_RDONLY) == -1))
+							if((fd = open(fileName, O_RDONLY, 0666)) == -1)
 							{
-								fprintf(stderr, "Error: Could not open file for reading");
+								fprintf(stderr, "Error: Could not open file for reading\n");
 							}
 							if(dup2(fd, 0)<0){
-									fprintf(stderr, "Could not duplicate the fd");
+									fprintf(stderr, "Could not duplicate the fd\n");
 							}
 							close(fd);
 							break;
@@ -153,50 +173,57 @@ int main(int argc, char *argv[]){
 							if(rdrTkn[1] == '>')
 							{
 								fileName = rdrTkn + 2;
-								if((fd = open(fileName, O_WRONLY|O_CREAT|O_APPEND) == -1))
+								if((fd = open(fileName, O_WRONLY|O_CREAT|O_APPEND, 0666)) == -1)
 								{
-									fprintf(stderr, "Error: Could not open or create file for writing in append mode");
+									fprintf(stderr, "Error: Could not open or create file for writing in append mode\n");
 								}
 									
 							}
 							else
 							{
 								fileName = rdrTkn + 1;
-								if((fd = open(fileName, O_WRONLY|O_CREAT|O_TRUNC) == -1))
+								if((fd = open(fileName, O_WRONLY|O_CREAT|O_TRUNC, 0666)) == -1)
 								{
-									fprintf(stderr, "Error: Could not open or create file for writing in truncation mode");
+									fprintf(stderr, "Error: Could not open or create file for writing in truncation mode\n");
 								}
 							}
-							if(dup2(fd, 1)<0){
-									fprintf(stderr, "Could not duplicate the fd");
+							printf("File name: %s\n", fileName);
+							printf("fd: %d\n", fd);
+							if(dup2(fd, 1) < 0)
+							{
+								fprintf(stderr, "Could not redirect stdout to specified file: %s\n", strerror(errno));
 							}
 							close(fd);
 							break;
 						case '2':
-							if(rdrTkn[2]=='>'){
-								
+							if(rdrTkn[2]=='>')
+							{
 								fileName = rdrTkn +3;
-								fd = open(fileName, O_WRONLY|O_CREAT|O_APPEND, 0666);
+								if((fd = open(fileName, O_WRONLY|O_CREAT|O_APPEND, 0666)) == -1)
+								{
+									fprintf(stderr, "Error: Could not open or create file for writing in append mode\n");
+								}
 								
 							}else{
 								fileName = rdrTkn +2;
-								fd = open(fileName, O_WRONLY|O_CREAT|O_TRUNC, 0666);
-								
+								if((fd = open(fileName, O_WRONLY|O_CREAT|O_TRUNC, 0666)) == -1)
+								{
+									fprintf(stderr, "Error: Could not open or create file for writing in truncation mode\n");
+								}
 							}
-							if(dup2(fd, 2)<0){
-								fprintf(stderr, "Could not duplicate the fd.\n");
+							if(dup2(fd, 2) < 0)
+							{
+								fprintf(stderr, "Could not redirect stderr to specified file: %s\n", strerror(errno));
 							}
 							close(fd);
 							break;
 					}
 				}
-				/*not sure whether i get this right
-				if(execvp(cmd[0],cmd)<0){
-					fprintf(stderr, "Fail to execute.\n");
+				if(execvp(cmdArgs[0],cmdArgs)<0){
+					fprintf(stderr, "Failed to execute: %s\n", strerror(errno));
 					exit(127);
 				}
-				*/
-				return 0;		
+				//return 0;		
 			}
 			
 			// wait somewhere here
@@ -204,7 +231,7 @@ int main(int argc, char *argv[]){
 			if(w==-1)	fprintf(stderr, "Wait failed.\n");
 			else{
 				if(return_val==0){
-					fprintf(stderr, "Child process %d consumed %ld.%.6ld seconds of user time\n", w, ru.ru_utime.tv_sec, ru.ru_utime.tv_usec);
+					fprintf(stderr, "Child process %d exited normalley\n", w);
 				}else{
 					if(WIFSIGNALED(return_val))
 						fprintf(stderr, "Child process %d exited with signal%d\n", w, WTERMSIG(return_val));
@@ -212,15 +239,24 @@ int main(int argc, char *argv[]){
 						fprintf(stderr, "Child process %d exited with non-zero return value %d.\n", w, WEXITSTATUS(return_val));
 				}
 			}
-			
-			timersub(&end, &start, &result);
-			fprintf(stdout, "Real: %ld.%6lds User: %ld.%06lds Sys: %ld.%06lds\n", 
-			result.tv_sec, result.tv_usec, ru.ru_utime.tv_sec,
-			ru.ru_utime.tv_usec, ru.ru_stime.tv_sec, ru.ru_stime.tv_usec);
+			gettimeofday(&realEnd, NULL);
+			timersub(&realEnd, &realStart, &real);
+			fprintf(stdout, "Real: %ld.%.6lds User: %ld.%.6lds Sys: %ld.%.6lds\n", real.tv_sec, real.tv_usec, ru.ru_utime.tv_sec, ru.ru_utime.tv_usec,
+				ru.ru_stime.tv_sec, ru.ru_stime.tv_usec);
 		}
+		clearCommand(cmdArgs, argLength);
+		clearCommand(cmd, cmd_length+1);
 		free(cmd);
 	}
 	return 0;
+}
+
+void clearCommand(char **command, int cmd_length)
+{
+	for(int i = 0; i<cmd_length;i++)
+	{
+		command[i] = NULL;
+	}
 }
 
 void printCommand(char **command, int cmd_length)

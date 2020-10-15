@@ -1,0 +1,2 @@
+Error: Could not open file for reading
+Could not duplicate the fd
