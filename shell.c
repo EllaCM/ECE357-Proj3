@@ -54,24 +54,26 @@ int main(int argc, char *argv[]){
 			cmd[cmd_length] = tokenCpy;
 			cmd_length++;
 			cmd = realloc(cmd, (cmd_length+1)*sizeof(char*));
-			cmd[cmd_length] = NULL; //empty out any strings from last time
+			cmd[cmd_length] = 0; //empty out any strings from last time
 			if(lineptr){lineptr = NULL;}
 		}
 		int argLength = 0;
 		if(redirIndex)
 		{
-			argLength = redirIndex;
+			argLength = redirIndex + 1;
 			cmdArgs = realloc(cmdArgs, argLength*sizeof(char*)); //Create vector of arguments without redirection
 			for(int i = 0; i<redirIndex;i++)
 			{
 				cmdArgs[i] = cmd[i];
 			}
+			cmdArgs[redirIndex] = 0;
 		}
 		else
 		{
 			argLength = cmd_length;
 			cmdArgs = realloc(cmdArgs, argLength*sizeof(char*));
 			cmdArgs = cmd;
+			cmdArgs[argLength] = 0;
 		}
 		//built-in commands
 		if(!strcmp(cmd[0], "cd"))
